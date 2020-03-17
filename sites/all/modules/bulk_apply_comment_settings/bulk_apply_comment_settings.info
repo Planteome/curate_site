@@ -1,0 +1,12 @@
+name = Bulk apply comment settings
+description = Bulk apply comment settings
+core = 7.x
+
+dependencies[] = comment
+
+; Information added by Drupal.org packaging script on 2016-10-24
+version = "7.x-1.0"
+core = "7.x"
+project = "bulk_apply_comment_settings"
+datestamp = "1477315747"
+

@@ -1,0 +1,12 @@
+name = gramene
+description = A theme by newbee.
+core = 7.x
+
+base theme = bootstrap
+
+stylesheets[all][] = css/style.css
+
+regions[content]        	= Content
+regions[header]         	= Header
+regions[front_view]         = Front_View
+regions[footer]        		= Footer

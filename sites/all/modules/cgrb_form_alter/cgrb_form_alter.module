@@ -1,0 +1,617 @@
+<?php
+
+/**
+ * @file
+ * A module to alter OSU CGRB forms 
+ */
+
+ /**
+ * Implements hook_help().
+ *
+ * Displays help and module information.
+ *
+ * @param path 
+ *   Which path of the site we're using to display help
+ * @param arg 
+ *   Array that holds the current path as returned from arg() function
+ */
+  
+function cgrb_form_alter_help($path, $arg) {
+  switch ($path) {
+    case "admin/help#cgrb_form_alter":
+      return t("Alters forms in a way to preserve Planteome workflow."); 
+      break; 
+  }
+}
+
+/*
+ * Implementation of hook_form_alter()
+ */
+function cgrb_form_alter_form_alter(&$form, &$form_state, $form_id){
+  global $user;
+	if($form_id == 'annotation_node_form'){
+     $node = $form_state['node'];
+      if(!isset($node->nid) || isset($node->is_new)){
+			$q_params = drupal_get_query_parameters();
+       if(count($q_params) && isset($q_params['gene'])){
+				$gene = node_load($q_params['gene']);
+        $form['field_gene']['und'][0]['target_id']['#default_value'] = $gene->title.' ('.$gene->nid.')';
+				$species = node_load($gene->field_ref_species['und'][0]['target_id']);
+
+				// $form['field_gene']['und'][0]['target_id']['#default_value'] = $node;
+				$form['field_ref_species']['und'][0]['target_id']['#default_value'] = $species->title.' ('.$species->nid.')';
+				// echo'<pre>';var_dump($form);exit;
+			}
+			// echo'<pre>';var_dump('nope');exit;
+			//if there is gene query parameter, prefill
+			$accession_int = format_annotation_accession_alt_1();
+			$form['title']['#default_value'] = 'A'.$accession_int;
+			$form['actions']['submit']['#submit'][]='format_annotation_accession_alt_2';
+		}
+      $form['field_with_or_from'][LANGUAGE_NONE]['add_more']['#value'] = t('add another data source');
+      $form['field_db_reference'][LANGUAGE_NONE]['add_more']['#value'] = t('add another DB reference');
+		//here goes the ajaxification of the sources dropdown
+		//$tmp = entity_load('field_collection_item', $form['field_db_reference']['und'][0]['value']);
+		// echo'<pre>';var_dump($form['field_db_reference']['und'][0]);exit;
+    //echo "<pre>"; print_r($form); exit();
+    // $form['field_gene'][LANGUAGE_NONE][0]['target_id']['#ajax'] = array(
+    //       'callback' => 'gene_link_to_species',
+    //       'event' => 'autocompleteFill',
+    //       'wrapper' => 'annotation_gene_form',
+    //     ); 
+    // $form['#prefix'] = '<div id="annotation_gene_form">';
+    // $form['#suffix'] = '</div>';
+
+    $form['field_ontology_id'][LANGUAGE_NONE][0]['#suffix'] = "<div id='ontology-descr'></div>";
+    $form['field_ontology_id'][LANGUAGE_NONE][0]['value']['#ajax'] = array(
+      'callback' => 'ontology_field_get_info',
+      'wrapper' => 'ontology-descr',
+      'method' => 'replace',
+      'effect' => 'fade',
+    );
+    
+
+	}
+	if ($form_id == 'user_profile_form' && !in_array('administrator', $user->roles)) {
+		$form['field_curation_species']['#access'] = false;
+	}
+
+	if($form_id == 'views_exposed_form' && $form_state['view']->name == 'workbench_moderation'){
+		if(isset($form['type']['#options'])){
+			$form['type']['#options'] = array('All' => '- Any -',
+											'annotation' => 'Annotation',
+										 	'gene' => 'Gene');
+		}
+
+    $form['#suffix'] = "<div style='background:#ccc;border:1px solid;padding:15px;margin-bottom:15px;'>Filter content you've created/edited with the dropdowns above, search by title, and sort results by clicking on the column header.</div>";
+
+    global $user;
+
+    $query = db_select('users', 'u');
+    $query->Leftjoin('field_data_field_firstname', 'fn', 'u.uid = fn.entity_id');
+    $query->Leftjoin('field_data_field_lastname', 'ln', 'u.uid = ln.entity_id');
+    $query
+      ->fields('u', array('name'))
+      ->fields('fn',array('field_firstname_value'))
+      ->fields('ln',array('field_lastname_value'))
+      ->condition('u.uid', $user->uid);
+    $result = $query->execute()->fetchAll();
+
+    $user_name = $result[0]->name;
+    /*$comment->created ->$format_date;*/
+    if(isset($result[0]->field_firstname_value) && !empty($result[0]->field_firstname_value) && isset($result[0]->field_lastname_value)){
+      $user_name = $result[0]->field_firstname_value." ".$result[0]->field_lastname_value;
+    }
+
+    $form['#prefix'] = "<h2>".$user_name."'s workbench: </h2>";
+
+	}
+  
+
+
+  if($form_id == 'gene_node_form' || $form_id == 'annotation_node_form'){
+    //echo "<pre>"; print_r($form); exit(); 
+      drupal_add_js(base_path().drupal_get_path('module','cgrb_form_alter').'/js/form_alter.js','file');
+      ctools_include('ajax');
+      ctools_include('modal');
+      ctools_modal_add_js();
+
+      foreach ($form['field_publication'][LANGUAGE_NONE] as $key => $value) {
+        if(!is_numeric($key)) continue;
+
+        if(!isset($form_state['values']['field_publication'][LANGUAGE_NONE][$key]['target_id']) || empty($form_state['values']['field_publication'][LANGUAGE_NONE][$key]['target_id'])){
+          $form['field_publication'][LANGUAGE_NONE][$key]['operation_type']= array(
+            '#type' => 'radios',
+            '#weight' => -1,
+            '#title' => t(''),
+            '#options' => array(t('Select Publication from Database'), t('Add New Publication to Database')),
+            '#default_value' => 0,
+            '#prefix' => "<div id='operation-type-".$key."' class='operation-type-field' data-key=".$key.">",
+            '#suffix' => '</div>',
+          );
+        }
+        
+
+        $biblio_ciation = '';
+        if(isset($form_state['values']['field_publication'][LANGUAGE_NONE][$key]['target_id']) && !empty($form_state['values']['field_publication'][LANGUAGE_NONE][$key]['target_id'])){
+          $node_bilio = node_load($form_state['values']['field_publication'][LANGUAGE_NONE][$key]['target_id']);
+          $node_view = node_view($node_bilio,'teaser');
+          $biblio_ciation = drupal_render($node_view);
+        }
+
+        $form['field_publication'][LANGUAGE_NONE][$key]['target_id']['#weight'] = 1;
+        $form['field_publication'][LANGUAGE_NONE][$key]['target_id']['#prefix'] = "<div id='operation-target-".$key."'>";
+       $form['field_publication'][LANGUAGE_NONE][$key]['target_id']['#suffix'] = "</div><div id='biblio-full_citation-".$key."' >".$biblio_ciation."</div> ";
+        
+        if(!isset($form['#node']->nid) || isset($form['#node']->is_new)){
+          $output = ctools_modal_text_button(t('Add Biblio'), 'biblio/nojs/add/'.$key, 'Add Biblio');
+          $form['field_publication'][LANGUAGE_NONE][$key]['biblio_link'] = array(
+            '#type' => 'item',
+            '#markup' => $output,
+            '#weight' => 21,
+            '#prefix' => '<div id="biblio-message-'.$key.'"></div><div id="biblio-link-'.$key.'" style="display:none;">',
+            '#suffix' => '</div>',
+          );
+        }else{
+          if(isset($form['#node']->field_publication[LANGUAGE_NONE][$key]['target_id'])){
+            $form['field_publication'][LANGUAGE_NONE][$key]['operation_type']['#options'] = array(t('Add new publication'), t('Edit publication'));
+
+
+            $entity_nid = $form['#node']->field_publication[LANGUAGE_NONE][$key]['target_id'];
+            $output = ctools_modal_text_button(t('Edit Biblio content'), 'modal/node/'.$entity_nid.'/edit/nojs/'.$key, 'Edit Biblio content');
+            $form['field_publication'][LANGUAGE_NONE][$key]['biblio_link'] = array(
+              '#type' => 'item',
+              '#markup' => $output,
+              '#weight' => 21,
+              '#prefix' => '<div id="biblio-message-'.$key.'"></div><div id="biblio-link-'.$key.'" style="display:none;">',
+              '#suffix' => '</div>',
+            );
+          }else{
+            $output = ctools_modal_text_button(t('Add Biblio'), 'biblio/nojs/add/'.$key, 'Add Biblio');
+            $form['field_publication'][LANGUAGE_NONE][$key]['biblio_link'] = array(
+              '#type' => 'item',
+              '#markup' => $output,
+              '#weight' => 21,
+              '#prefix' => '<div id="biblio-message-'.$key.'"></div><div id="biblio-link-'.$key.'" style="display:none;">',
+              '#suffix' => '</div>',
+            );
+          }
+        }
+
+        $form['field_publication'][LANGUAGE_NONE][$key]['target_id']['#ajax'] = array(
+          'callback' => 'publications_put_full_citation',
+          'wrapper' => 'biblio-full_citation-'.$key,
+          'method' => 'replace',
+          'effect' => 'fade',
+        );
+        
+      }
+  }
+
+
+
+
+  if($form_id == 'gene_node_form' || $form_id == 'annotation_node_form'){
+
+    global $user;
+     //echo "<pre>"; print_r($form); exit();
+    $form['field_publication'][LANGUAGE_NONE]['add_more']['#value'] = t('Add another Publication');
+
+
+    //  $form['immutable'] = array(
+    //   '#type' => 'textarea', //you can find a list of available types in the form api
+    //   '#title' => 'Description',
+    //   '#size' => 60,
+    //   '#weight' => -1,
+    //   '#access' => 0,
+    //   '#value' => $form['node']->body,
+
+    // );
+     //echo "<pre>"; print_r($form['node']->body); exit();
+    $node = $form_state['node'];
+    // echo'<pre>';var_dump( $node->is_new );exit;
+//echo'<pre>';print_r($form['field_synonyms']['und'][0]['value']['#attributes']['disabled']);exit;
+
+    if( isset($node->nid) && in_array('Contributors', $user->roles) ){
+      $form['body'][LANGUAGE_NONE][0]['summary']['#access'] = FALSE;
+      $form['field_gene_symbol']['und']['0']['value']['#attributes']['disabled'] = TRUE; 
+      $form['field_gene_name']['und']['0']['value']['#attributes']['disabled'] = TRUE;
+      
+      
+      $form['field_synonyms']['und']['0']['value']['#attributes']['disabled'] = TRUE;
+      $form['field_gene_id']['und']['0']['value']['#attributes']['disabled'] = TRUE; 
+      $form['field_ref_species']['und']['0']['value']['#attributes']['disabled'] = TRUE; 
+      $form['field_gene_type']['und']['0']['value']['#attributes']['disabled'] = TRUE; 
+      $form['field_data_source']['und']['0']['value']['#attributes']['disabled'] = TRUE;
+      
+      foreach($form['field_synonyms']['und'] as $key => $v){
+        if(!is_numeric($key)){
+          continue;
+        }
+        
+        if(isset($form['field_synonyms']['und'][$key]['value']['#default_value']) && !empty($form['field_synonyms']['und'][$key]['value']['#default_value'])){
+          $form['field_synonyms']['und'][$key]['value']['#attributes']['disabled']=TRUE;
+          unset($form['field_synonyms']['und'][$key]['remove_button']);
+        }
+      }
+
+      foreach($form['field_publication']['und'] as $key => $v){
+        if(!is_numeric($key)){
+          continue;
+        }
+        
+        if(isset($form['field_publication']['und'][$key]['target_id']['#default_value']) && !empty($form['field_publication']['und'][$key]['target_id']['#default_value'])){
+          $form['field_publication']['und'][$key]['target_id']['#attributes']['disabled']=TRUE;
+          unset($form['field_publication']['und'][$key]['remove_button']);
+        }
+      }
+
+    }  
+
+    if(in_array('Contributors', $user->roles)){
+      //Making revision message mandatory for contributors
+      // echo'<pre>';var_dump($form['workbench_moderation']);exit;
+      $form['revision_information']['log']['#required'] = true;
+      $form['revision_information']['log']['#title'] = t('Provide us a comment about your edits');
+
+      $form['revision_information']['text'] = [
+        '#type' => 'textarea',
+        '#default_value' => 'To submit your revision for review, change the dropdown to "Needs Review". To save your current state and continue work later, leave the dropdown as "Draft"',
+        '#disabled' => TRUE,
+      ];
+      //echo "<pre>"; print_r($form); exit;      
+    }
+  } 
+  if($form_id == 'gene_node_form'){
+    //echo "<pre>"; print_r($form['#node']);exit;
+    if(isset($form['#node']->nid)){
+      $form['immutable'] = array(
+        '#type' => 'textarea', //you can find a list of available types in the form api
+        '#title' => 'Current Description',
+        '#size' => 60,
+        '#weight' => -1,
+        '#attributes' => array('disabled' => 'disabled'),
+        '#default_value' => $form['#node']->body[LANGUAGE_NONE][0]['value'],
+      );
+    }
+       $form['field_synonyms'][LANGUAGE_NONE]['add_more']['#value'] = t('Add another Synonym');  
+        //echo "<pre>"; print_r($form); exit();
+  }    
+
+  if($form_id == 'biblio_node_form'){
+    $form['#prefix'] = "<div style='background:#eee;padding:15px;border:1px solid;margin-bottom:15px;'>If your source does not have a PMID or DOI, and is not in BibTex format, please select a source type from the dropdown below and fill out the resulting form. If you select a type and the form does not automatically redirect you, click next.</div>";
+  }
+
+}
+
+
+
+//helper functions
+/*function format_annotation_accession_alt_1(){
+	$results = db_select('annotation_accession', 'ann_acc')
+			->fields('ann_acc')
+			->execute()
+			->fetchAssoc();
+	$accession_int = $results['accession'];
+	$accession_number = (string)$accession_int;
+	$acc_len = strlen($accession_number);
+	for($acc_len;$acc_len < 12; $acc_len++){
+		$accession_number = '0'.$accession_number;
+	}
+	return $accession_number;
+}
+
+function format_annotation_accession_alt_2(){
+	$results = db_select('annotation_accession', 'ann_acc')
+			->fields('ann_acc')
+			->execute()
+			->fetchAssoc();
+	$accession_int = $results['accession'];
+	$accession_number = (string)$accession_int;
+	$acc_len = strlen($accession_number);
+	for($acc_len;$acc_len < 12; $acc_len++){
+		$accession_number = '0'.$accession_number;
+	}
+	$accession_int++;
+	$query = db_update('annotation_accession')
+		->fields(array(
+			'accession' => $accession_int))
+		->execute();
+	$results = db_select('annotation_accession', 'ann_acc')
+			->fields('ann_acc')
+			->execute()
+			->fetchAssoc();
+}*/
+
+function cgrb_form_alter_menu() {
+  $items['biblio/%ctools_js/add/%'] = array(
+    'page callback' => 'cgrb_form_alter_node_add_modal_callback',
+    'page arguments' => array(1,3),
+    'access arguments' => array('access content'),
+    'theme callback' => 'ajax_base_page_theme',
+  );
+
+  $items['modal/node/%/edit/%ctools_js/%'] = array(
+    'page callback' => 'cgrb_form_alter_page_edit',
+     'page arguments' => array(2, 4,5),
+    'access callback' => 'node_access',
+    'access arguments' => array('update', 2),
+    'theme callback' => 'ajax_base_page_theme',
+  );
+
+  return $items;
+}
+
+function ontology_field_get_info($form,$form_state){
+  $ontoloty_term = $form_state['values']['field_ontology_id'][LANGUAGE_NONE][0]['value'];
+  $ontology_term_info = get_ontology_term_info_api($ontoloty_term);
+
+  $output = '';
+
+  if($ontology_term_info != $ontoloty_term){
+    $output .= "<div id='ontology-descr' style='border:1px solid #000;padding:10px;background:#ccc;'>";
+    $output .= "<div><label>Annotation Class Label: </label> ".$ontology_term_info->annotation_class_label."</div>";
+    $output .= "<div><label>Description: </label> ".$ontology_term_info->description."</div>";
+    $output .= "</div>";
+  }
+
+  $commands = array();
+  $commands[] = ajax_command_replace('#ontology-descr',$output);
+
+  return array('#type' => 'ajax','#commands' => $commands);
+
+}
+
+/**
+ * modal node edit modal callback
+ */
+function cgrb_form_alter_page_edit($nid, $js, $key) {
+  //echo "<pre>"; print_r($node); exit();
+  if (!$js) {
+     return drupal_goto('node/' . $nid . '/edit/');
+
+    // return drupal_goto('node/4/edit');
+  }
+
+   // Include your ctools crap here
+  ctools_include('node.pages', 'node', '');
+  ctools_include('modal');
+  ctools_include('ajax');
+  $node = node_load($nid);
+  $form_state = array(
+    'title' => t('Add my conten type'),
+    'ajax' => TRUE,
+  );
+  $form_state['build_info']['args'] = array($node);
+
+  // change this to your type node form
+  $output = ctools_modal_form_wrapper('biblio_node_form', $form_state);
+
+  if (!empty($form_state['executed'])) {
+    $output = array();
+    // Close the modal
+    $output[] = ctools_modal_command_dismiss();
+
+    $messages = drupal_get_messages('status', TRUE);
+      
+    $msg_opt = "<div id=\"biblio-message-'.$key.'\"><div class=\"messages status\">\n";
+    //if (count($messages['status']) > 1) {
+      $msg_opt .= " <ul>\n";
+      foreach ($messages['status'] as $message) {
+        $msg_opt .= '  <li>' . $message . "</li>\n";
+      }
+      $msg_opt .= " </ul>\n";
+    //}
+    $msg_opt .= "</div></div>\n";
+    $output[] = ajax_command_replace('#biblio-message-'.$key, $msg_opt);
+    // I use this method a lot on pages that have views, so what I do is get the latest view content
+    // with the latest node and replace the current view. magic!
+    /*
+    $html = views_embed_view('my_view', 'my_display';
+    $output[] = ajax_command_html('.view-display-id-my_display', $html);
+    */
+
+    if(isset($form_state['values']['nid'])){
+      $nid = $form_state['values']['nid'];
+      
+      $node_bilio = node_load($nid);
+      $node_view = node_view($node_bilio,'teaser');    
+
+      $rendered_node = "<div id='biblio-full_citation-".$key."' class='biblio-full-citation'>".drupal_render($node_view)."</div>";    
+
+      $output[] = ajax_command_replace('#biblio-full_citation-'.$key,$rendered_node);
+    }
+  }
+  
+  print ajax_render($output);  
+  exit;
+}
+/**
+ * modal node add modal callback
+ */
+function cgrb_form_alter_node_add_modal_callback($js = FALSE,$key) {
+  global $user;
+  //$error_message = $_SESSION['messages']['error'];
+  // If people aren't using javascript, then I just boot em. sorry. its 2011.
+  if (!$js) return "Javascript required";
+  
+  // Include your ctools crap here
+  ctools_include('node.pages', 'node', '');
+  ctools_include('modal');
+  ctools_include('ajax');
+  // Create a blank node object here. You can also set values for your custom fields here as well.
+  $node = (object) array(
+    'uid' => $user->uid, 
+    'name' => (isset($user->name) ? $user->name : ''), 
+    'type' => 'biblio', 
+    'language' => LANGUAGE_NONE,
+    );
+  $form_state = array(
+    'title' => t('Add my publication'),
+    'ajax' => TRUE,
+  );
+  $form_state['build_info']['args'] = array($node);
+  // change this to your type node form
+  $output = ctools_modal_form_wrapper('biblio_node_form', $form_state);
+  // This means the form has been exectued
+  if (!empty($form_state['executed'])) {
+  	
+  	if(isset($form_state['values']['nid']) && !empty($form_state['values']['nid'])){
+  		// Close the modal
+    	// $output[] = ctools_modal_command_dismiss();
+    	$output = array(ctools_modal_command_dismiss());
+
+    	$nid = $form_state['values']['nid'];
+      $title = $form_state['values']['title'];
+
+      $inputValue = $title." (".$nid.")";
+
+      $node_bilio = node_load($nid);
+      $node_view = node_view($node_bilio,'teaser');    
+
+      $rendered_node = "<div id='biblio-full_citation-".$key."' class='biblio-full-citation'>".drupal_render($node_view)."</div>";    
+
+      $output[] = ajax_command_replace('#biblio-full_citation-'.$key,$rendered_node);  
+
+    	$link = ctools_modal_text_button(t('Edit Content'), 'modal/node/'.$nid.'/edit/nojs/'.$key, 'test_biblio');
+    	$output[] = ajax_command_replace('#biblio-link-'.$key.' a.ctools-use-modal', $link);
+
+      $messages = drupal_get_messages('status', TRUE);
+      
+      $msg_opt = "<div id=\"biblio-message-'.$key.'\"><div class=\"messages status\">\n";
+      //if (count($messages['status']) > 1) {
+        $msg_opt .= " <ul>\n";
+        foreach ($messages['status'] as $message) {
+          $msg_opt .= '  <li>' . $message . "</li>\n";
+        }
+        $msg_opt .= " </ul>\n";
+      //}
+      $msg_opt .= "</div></div>\n";
+      $output[] = ajax_command_replace('#biblio-message-'.$key, $msg_opt);
+
+      $output[] = ajax_command_invoke('#operation-target-'.$key.' input.form-text', 'val', array($inputValue));
+
+      $output[] = ajax_command_invoke('#operation-type-'.$key, 'hide');
+
+  	}else{
+	    // $output = array();
+	    $output[] = ajax_command_html('array()');  		
+  	}
+    
+    // I use this method a lot on pages that have views, so what I do is get the latest view content
+    // with the latest node and replace the current view. magic!
+    /*
+    $html = views_embed_view('my_view', 'my_display';
+    $output[] = ajax_command_html('.view-display-id-my_display', $html);
+    */    
+  }
+   //$output.= theme('status_messages', array('display' => 'error'));
+  print ajax_render($output);  
+  exit;
+}
+
+function publications_put_full_citation($form,$form_states){
+  //echo "<pre>"; print_r($form_states['input']);exit;
+
+  $triggering_ele = $form_states['input']['_triggering_element_name'];
+  $key = explode('field_publication[und][', $triggering_ele);
+  $key = $key[1];
+  $key = explode('][target_id]', $key);
+  $key = $key[0];
+
+  $commands = array();
+
+  if(isset($form_states['values']['field_publication'][LANGUAGE_NONE][$key]['target_id']) && !empty($form_states['values']['field_publication'][LANGUAGE_NONE][$key]['target_id']) && is_numeric($key)){
+    $node_bilio = node_load($form_states['values']['field_publication'][LANGUAGE_NONE][$key]['target_id']);
+    $node_view = node_view($node_bilio,'teaser');
+    $rendered_node = "<div id='biblio-full_citation-".$key."' class='biblio-full-citation'>".drupal_render($node_view)."</div>";    
+
+    $commands[] = ajax_command_replace('#biblio-full_citation-'.$key,$rendered_node);
+
+    $commands[] = ajax_command_invoke('#operation-type-'.$key, 'hide');
+  }
+
+  return array('#type' => 'ajax','#commands' => $commands);
+}
+// function cgrb_form_alter_js_alter(&$javascript) {
+//   // remove the JS that does the show/hide summary
+//   unset($javascript['modules/field/modules/text/text.js']);
+// }
+
+function cgrb_form_alter_form_comment_form_alter(&$form, &$form_state, $form_id, &$name, $account) {
+  global $user;
+  //$label = t('New label');
+  $account = user_load($user->uid);
+  $first_name= $account->field_firstname['und'][0]['value'];
+  $last_name= $account->field_lastname['und'][0]['value'];
+  //echo "<pre>"; print_r($form); exit();
+
+  if (isset($form['author']['_author'])) {
+    $form['author']['_author']['#markup'] = $first_name ." " . $last_name;
+  }
+   $form['subject']['#access'] = FALSE;
+    //$form['body_field']['und'][0]['format']['#attributes']['class'] = 'invisible';
+  // else {
+  //   $form['author']['name']['#title'] = $label;
+  // }
+}
+// function cgrb_form_alter_username_alter(&$name, $account, $form_id, $form_state) {
+//     // With user_load we get all fields with are added not by core and add them to the orginal $account
+//    if($form_id == 'comment_form'){
+//         echo "<pre>"; print_r($from); exit();
+//       $account = user_load($account->uid);
+       
+//       if (!empty($account->field_firstname) && !empty($account->field_lastname)) {
+       
+//       $name = $account->field_firstname['und'][0]['value'] . ' ' . $account->field_lastname['und'][0]['value'];
+
+//       }
+//    }   
+// }
+  // if($form_id == 'comment_form'){
+  //       echo "<pre>"; print_r($from); exit();
+  //  }     
+// function gene_link_to_species(&$form, $form_state) {
+//   //echo "<pre>"; print_r($form_states['input']);exit;
+
+//   if(isset($form_state['values']['field_gene'])) {
+//       $nid = $form_state['values']['field_gene']['und'][0]['nid'];
+//       $node = node_load($nid);
+//       //echo "<pre>"; print_r($node); exit();
+
+//   }
+//     $commands = array();
+
+//   return array('#type' => 'ajax', '#commands' => $commands);
+
+// }
+
+
+function cgrb_form_alter_translated_menu_link_alter(&$link) {
+  global $user;
+
+  // Hide the "User account" link for anonymous users.
+  if ($link['href'] == 'admin/workbench') {
+    echo "<pre>"; print_r($link);exit;
+    $link['href'] = 'admin/workbench/my-published-content';
+  }
+}
+
+function cgrb_form_alter_module_implements_alter(&$implementations, $hook) {
+  if ($hook == 'translated_menu_link_alter') {
+    $group = $implementations['cgrb_form_alter'];
+    unset($implementations['cgrb_form_alter']);
+    $implementations['cgrb_form_alter'] = $group;
+  }
+}
+
+function get_ontology_term_info_api($id_string){
+  $html_json = htmlspecialchars(curl_get_contents("http://browser.planteome.org/api/autocomplete/ontology?q=".url_encode_2($id_string)));
+  $tmp = html_entity_decode($html_json);
+  $json_obj = json_decode($tmp);
+  $output = $id_string;
+  if(is_object($json_obj) && count($json_obj->data)){
+    $output = $json_obj->data[0];
+  }
+  return $output;
+}

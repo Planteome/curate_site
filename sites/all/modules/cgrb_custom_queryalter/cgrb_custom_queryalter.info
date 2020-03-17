@@ -1,0 +1,4 @@
+name = CGRB Custom Query Alter
+description = CRGB custom query alter used form workbench_moderation view form changes in query alter.
+core = 7.x
+package = Planteome

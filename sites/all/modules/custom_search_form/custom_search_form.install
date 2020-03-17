@@ -1,0 +1,56 @@
+<?php 
+function custom_search_form_schema() {
+  $schema['custom_search_form'] = array(
+    // Example (partial) specification for table "node".
+    // 'description' => 'The base table for nodes.',
+    'fields' => array(
+      'sid' => array(
+        // 'description' => 'The primary identifier for a node.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'infield' => array(
+        // 'description' => 'This is name',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'type' => array(
+        // 'description' => 'this is email',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'species' => array(
+        // 'description' => 'this is password',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'find' => array(
+        // 'description' => 'this is password',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'count' => array(
+        // 'description' => 'this is password',
+        'type' => 'int',
+        'size' => 'small',
+        'not null' => TRUE,
+        'default' => 1,
+      ),   
+    ),
+    
+    // For documentation purposes only; foreign keys are not created in the
+    // database.
+   
+    'primary key' => array('sid'),
+  );
+  return $schema;
+}

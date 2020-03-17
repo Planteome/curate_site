@@ -1,0 +1,4 @@
+name = Custom Search Form
+description = Custom Search Form.
+core = 7.x
+package = Planteome

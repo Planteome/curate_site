@@ -1,0 +1,4 @@
+name = CGRB Data Import
+description = Provides scripts to pull in data from OWL files (species), GAF files (gene annotations), and Genes
+core = 7.x
+package = Planteome

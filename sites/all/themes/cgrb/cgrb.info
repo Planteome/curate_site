@@ -1,0 +1,17 @@
+name = CGRB
+description = custom theme for OSU CGRB
+core = 7.x
+base theme = bootstrap
+
+stylesheets[all][] = css/style.css
+
+scripts[] = js/scripts.js
+
+regions[header]		= Header
+regions[front_page] = Front Page
+regions[content]	= Content
+regions[footer]		= Footer
+regions[highlighted] = Highlighted
+regions[sidebar_first] = Sidebar First
+regions[sidebar_second] = Sidebar Second
+regions[rightsidebar_first] = Rightsidebar First

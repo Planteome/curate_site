@@ -1,0 +1,4 @@
+name = Planteome - Rules Components
+description = Custom Planteome Rules Components for D7 Rules
+core = 7.x
+package = Planteome

@@ -1,0 +1,35 @@
+<?php
+
+
+/*  function osucgrb_owlxmlparser_help($path, $arg) {
+  switch ($path) {
+    case "admin/help#osucgrb_owlxmlparser":
+      return t("The OSU CGRB site."); 
+      break; 
+  }
+} */
+ 
+ function osucgrb_owlxmlparser_menu() {
+	
+	$items['xmlparser'] = array(
+	'title'				=> 'Xml Parser',
+  	'page callback'		=> 'parser_form',
+  	'access callback' 	=> 'access_function1',
+  	
+		);
+	return $items;
+}
+
+function parser_form() {
+	return '';
+}
+
+function access_function1() {
+	global $user;
+	if (in_array('administrator', $user->roles)) {
+		return true;
+	} else {
+		return false;
+	}
+}
+	

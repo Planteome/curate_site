@@ -1,0 +1,206 @@
+<?php
+
+/**
+ * @file
+ * A module to alter OSU CGRB forms 
+ */
+
+ /**
+ * Implements hook_help().
+ *
+ * Displays help and module information.
+ *
+ * @param path 
+ *   Which path of the site we're using to display help
+ * @param arg 
+ *   Array that holds the current path as returned from arg() function
+ */
+function planteome_form_alter_help($path, $arg) {
+  switch ($path) {
+    case "admin/help#cgrb_form_alter":
+      return t("Alters forms in a way to preserve Planteome workflow."); 
+      break; 
+  }
+}
+
+/*
+ * Implementation of hook_form_alter()
+ */
+function planteome_form_alter_form_alter(&$form, &$form_state, $form_id){
+   // drupal_set_message($form_id);
+	global $user;
+	//Annotation content add
+	$node = $form_state['node'];
+	if($form_id == 'annotation_node_form'){
+		// echo'<pre>';var_dump($form);exit;
+		// echo'<pre>';var_dump($form['field_ontology_id']);exit;
+		// $form['field_ontology_id'][$node->language][0]['#autocomplete_path'] = 'autocomplete/ontology_term';
+		$form['field_ontology_id'][$node->language][0]['value']['#autocomplete_path'] = 'autocomplete/ontology_term';
+		$form['#validate'][] = 'ontology_qa_validate';
+		// echo'<pre>';var_dump($form);exit;
+		// echo'<pre>';var_dump($form);exit;
+		$form['field_date']['#access'] = FALSE;
+		// echo'<pre>';var_dump($user->roles);exit;
+		if(in_array('Contributors', array_values($user->roles))){
+			$form['field_db_reference']['#access'] = FALSE;
+		}
+		//NOTE - isset($node->is_new) seems to actually be useless :P
+		// echo'<pre>';var_dump('test');exit;
+		if(!isset($node->nid) || isset($node->is_new)){
+			// echo'<pre>';var_dump('test');exit;
+			$q_params = drupal_get_query_parameters();
+			if(count($q_params) && isset($q_params['gene'])){
+				$gene = node_load($q_params['gene']);
+				$form['field_gene']['und'][0]['target_id']['#default_value'] = $gene->title.' ('.$gene->nid.')';
+				$species = node_load($gene->field_ref_species['und'][0]['target_id']);
+
+				// $form['field_gene']['und'][0]['target_id']['#default_value'] = $node;
+				$form['field_ref_species']['und'][0]['target_id']['#default_value'] = $species->title.' ('.$species->nid.')';
+				// echo'<pre>';var_dump($form);exit;
+			}
+			// echo'<pre>';var_dump('nope');exit;
+			//if there is gene query parameter, prefill
+			$accession_int = format_annotation_accession_alt_1();
+			$form['title']['#default_value'] = 'A'.$accession_int;
+			$form['title']['#access'] = FALSE;
+			$form['field_data_source']['und'][0]['field_object_id']['und'][0]['value']['#default_value'] = 'A'.$accession_int;
+			$form['field_data_source']['#disabled'] = TRUE;
+			$form['actions']['submit']['#submit'][] = 'format_annotation_accession_alt_2';
+			// echo'<pre>';var_dump($form['field_data_source']['und'][0]['field_object_id']['und'][0]['value']['#default_value']);exit;
+
+		}
+	}
+	// if ($form_id == 'user_profile_form' && !user_access('administer')) {
+ //    	$form['field_curation_species']['#access'] = false;
+ //  	}
+	if($form_id == 'gene_node_form'){
+		if (!in_array('administrator', array_values($user->roles)) && isset($node->nid)) {
+			//shoud hide title, accession, gene ontology terms
+			$form['title']['#type'] = 'value';
+			// $form['field_gene_ontology_terms']['#access'] = FALSE;
+			// $form['field_gene_ontology_terms']['#type'] = 'value';
+			$form['field_gene_ontology_terms']['#access'] = FALSE;
+			$form['field_accession']['#access'] = FALSE;
+			$form['field_ref_species']['#disabled'] = TRUE;
+			$form['field_gene_type']['#disabled'] = TRUE;
+			$form['field_chromosome_no']['#disabled'] = TRUE;
+			$form['field_chromosome_start']['#disabled'] = TRUE;
+			$form['field_chromosome_stop']['#disabled'] = TRUE;
+			$form['field_data_source']['#disabled'] = TRUE;
+			// $form['field_accession']['#access'] = FALSE;
+			// echo'<pre>';var_dump($form['field_gene_ontology_terms']);exit;
+		}
+	}
+  	return $form;
+}
+
+//helper functions
+function format_annotation_accession_alt_1(){
+	$results = db_select('annotation_accession', 'ann_acc')
+			->fields('ann_acc')
+			->execute()
+			->fetchAssoc();
+	$accession_int = $results['accession'];
+	$accession_number = (string)$accession_int;
+	$acc_len = strlen($accession_number);
+	for($acc_len;$acc_len < 12; $acc_len++){
+		$accession_number = '0'.$accession_number;
+	}
+	return $accession_number;
+}
+
+function format_annotation_accession_alt_2(){
+	$results = db_select('annotation_accession', 'ann_acc')
+			->fields('ann_acc')
+			->execute()
+			->fetchAssoc();
+	$accession_int = $results['accession'];
+	$accession_number = (string)$accession_int;
+	$acc_len = strlen($accession_number);
+	for($acc_len;$acc_len < 12; $acc_len++){
+		$accession_number = '0'.$accession_number;
+	}
+	$accession_int++;
+	$query = db_update('annotation_accession')
+		->fields(array(
+			'accession' => $accession_int))
+		->execute();
+	$results = db_select('annotation_accession', 'ann_acc')
+			->fields('ann_acc')
+			->execute()
+			->fetchAssoc();
+}
+
+function planteome_form_alter_views_query_alter(&$view, &$query){
+	if($view->name == 'workbench_moderation' && $view->current_display == 'page_3'){
+		global $user;
+		// this should possibly be written more correctly?
+		$query->where[2]['conditions'][0]['value'][':node_uid_revision'][0] = $user->uid;
+		// echo'<pre>';var_dump($user);exit;
+	}
+}
+
+function ontology_qa_validate($form, &$form_state){
+	$aspect_tid = $form['field_aspect']['und']['#value'];
+	$ontology_term = $form['field_ontology_id']['und'][0]['value']['#value'];
+
+	$html_json = htmlspecialchars(curl_get_contents("http://browser.planteome.org/api/autocomplete/ontology?q=".url_encode_2($ontology_term)));
+	$tmp = html_entity_decode($html_json);
+	$json_obj = json_decode($tmp);
+	// $output = $id_string;
+	if(is_object($json_obj) && count($json_obj->data)){
+		$data = $json_obj->data;
+		$data_obj = $data[0];
+		$data_source = $data_obj->source;
+
+		switch ($aspect_tid) {
+			case '609':
+				if($data_source != 'cellular_component'){
+					form_set_error('field_ontology_id', 'Ontology ID does not match Ontology Type');
+				}
+				break;
+			case '2327':
+				if($data_source != 'plant_trait_ontology'){
+					form_set_error('field_ontology_id', 'Ontology ID does not match Ontology Type');
+				}
+				break;
+			case '603':
+				if($data_source != 'biological_process'){
+					form_set_error('field_ontology_id', 'Ontology ID does not match Ontology Type');
+				}
+				break;
+			case '605':
+				if($data_source != 'molecular_function'){
+					form_set_error('field_ontology_id', 'Ontology ID does not match Ontology Type');
+				}
+				break;
+			case '614':
+				if($data_source != 'plant_anatomy'){
+					form_set_error('field_ontology_id', 'Ontology ID does not match Ontology Type');
+				}
+				break;
+			case '2328':
+				if($data_source != 'plant_environment_ontology'){
+					form_set_error('field_ontology_id', 'Ontology ID does not match Ontology Type');
+				}
+				break;
+			case '2329':
+				if($data_source != 'plant_structure_development_stage'){
+					form_set_error('field_ontology_id', 'Ontology ID does not match Ontology Type');
+				}
+				break;
+			
+			default:
+				form_set_error('field_ontology_id', 'Ontology type does not match existing Ontology types.');
+				break;
+		}
+		// echo'<pre>';var_dump($json_obj);exit;
+		// foreach($json_obj->data as $data){
+		// 	if($data->id == $id_string){
+		// 		$output = $data->annotation_class_label;
+		// 	}
+		// }
+	}
+
+	// echo'<pre>';var_dump($form['field_ontology_id']['und'][0]['value']['#value']);exit;
+}

@@ -1,0 +1,4 @@
+name = Planteome Form Alters
+description = Provides form AND VIEWS alters for various Planteome forms to autoincrement accession, etc.
+core = 7.x
+package = Planteome

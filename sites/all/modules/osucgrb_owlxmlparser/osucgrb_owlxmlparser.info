@@ -1,0 +1,4 @@
+name = OSUCGRB Xml Parser
+description = OSUCGRB Xml Parser
+core = 7.x
+package = Planteome

@@ -1,0 +1,124 @@
+<?php
+/**
+ * @file
+ * Allows users to bulk apply comment settings.
+ */
+
+/**
+ * Implements hook_help().
+ */
+function bulk_apply_comment_settings_help($path, $args) {
+  if ($path == 'admin/help#bulk_apply_comment_settings') {
+    return t('To use this module, edit one of your content types, checking the box "Bulk Apply Comment settings" in the comment settings.');
+  }
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ */
+function bulk_apply_comment_settings_module_implements_alter(&$implementations, $hook) {
+
+  if ($hook == 'form_node_type_form_alter') {
+    $group = $implementations['bulk_apply_comment_settings'];
+    unset($implementations['bulk_apply_comment_settings']);
+    $implementations['bulk_apply_comment_settings'] = $group;
+  }
+
+  if ($hook == 'form_alter' && isset($implementations['bulk_apply_comment_settings'])) {
+    $group = $implementations['bulk_apply_comment_settings'];
+    unset($implementations['bulk_apply_comment_settings']);
+    $implementations['bulk_apply_comment_settings'] = $group;
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function bulk_apply_comment_settings_form_node_type_form_alter(&$form, &$form_state) {
+  $form['comment']['bulk_apply_settings'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Bulk Apply Comment settings'),
+    '#description' => t('Bulk apply comment settings to all nodes of this type.'),
+  );
+  $form['#submit'][] = 'bulk_apply_comment_settings_form_node_type_form_submit';
+}
+
+/**
+ * Creates the batch job to update the relevant nodes.
+ */
+function bulk_apply_comment_settings_form_node_type_form_submit($form, &$form_state) {
+
+  if ($form_state['values']['bulk_apply_settings']) {
+
+    $batch = array(
+      'title' => t('Updating comment settings'),
+      'init_message' => t('Initializing...'),
+      'progress_message' => t('Updating relevant content.'),
+      'error_message' => t('Updating node comment settings failed, please try again.'),
+      'operations' => array(
+        array('bulk_apply_comment_settings_batch_update_nodes',
+          array($form_state['values']['type'], $form_state['values']['comment']),
+        ),
+      ),
+    );
+
+    batch_set($batch);
+
+    drupal_set_message(t('Bulk applied comment settings to all nodes'));
+  }
+}
+
+/**
+ * Processes the relevant nodes.
+ */
+function bulk_apply_comment_settings_batch_update_nodes($type, $comment, &$context) {
+
+  if (!isset($context['sandbox']['progress'])) {
+
+    $context['sandbox']['progress'] = 0;
+    $context['sandbox']['current_node'] = 0;
+
+    $result = db_select('node', 'n')
+    ->fields('n')
+    ->condition('type', $type, '=')
+    ->execute();
+
+    $context['sandbox']['max'] = $result->rowCount();
+  }
+
+  $limit = 5;
+  // With each pass through the callback, retrieve the next group of nids.
+  $result = db_select('node', 'n')
+    ->fields('n')
+    ->condition('type', $type, '=')
+    ->condition('nid', $context['sandbox']['current_node'], '>')
+    ->orderBy('nid', 'ASC')
+    ->range(0, $limit)
+    ->execute()
+    ->fetchAllAssoc('nid');
+
+  $nodes = node_load_multiple(array_keys($result));
+  foreach ($nodes as $node) {
+
+    $node->comment = $comment;
+    node_save($node);
+
+    // Store some result for post-processing in the finished callback.
+    $context['results'][] = check_plain($node->title);
+
+    // Update our progress information.
+    $context['sandbox']['progress']++;
+    $context['sandbox']['current_node'] = $node->nid;
+    $context['message'] = t('Now processing node %progress of %max (%node_title)',
+      array(
+        '%progress' => $context['sandbox']['progress'],
+        '%max' => $context['sandbox']['max'],
+        '%node_title' => $node->title)
+      );
+  }
+  // Inform the batch engine that we are not finished,
+  // and provide an estimation of the completion level we reached.
+  if ($context['sandbox']['progress'] != $context['sandbox']['max']) {
+    $context['finished'] = $context['sandbox']['progress'] / $context['sandbox']['max'];
+  }
+}

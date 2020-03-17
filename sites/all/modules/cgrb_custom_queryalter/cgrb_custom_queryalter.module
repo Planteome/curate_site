@@ -1,0 +1,64 @@
+<?php
+function cgrb_custom_queryalter_views_query_alter(&$view, &$query) {
+	if ($view->name == 'workbench_moderation' && $view->current_display == 'needs_review_page') {
+
+		//dpm($view, __FUNCTION__);
+  		//dpm($query, __FUNCTION__);
+		$admin_role = 'Curators';
+		global $user;
+		$curation_species =array();
+		$species_field = 'node_workbench_moderation_node_history__field_data_field_ref_species.field_ref_species_target_id';
+		if (in_array($admin_role, $user->roles)) {
+		  
+		  $users = user_load($user->uid);
+		  
+		  foreach ($query->where[1]['conditions'] as $key => $value) {
+
+		  	if($species_field == $value['field']){
+		  		
+		  		$query->where[1]['conditions'][$key]['operator'] = 'IN';
+		  		foreach ($users->field_curation_species['und'] as $key1 => $user_species) {
+		  			$curation_species[] = $user_species['target_id'];
+		  		}
+				$query->where[1]['conditions'][$key]['value'] = $curation_species;
+				
+			}
+
+		  }
+
+		}
+		else{
+
+			foreach ($query->where[1]['conditions'] as $key => $value) {
+
+				if($species_field == $value['field']){
+					unset($query->where[1]['conditions'][$key]);
+				}
+
+			}
+			
+		}
+
+	}
+
+	if($view->name == "annotations_from_gene" && $view->current_display == "block"){
+		if($query->where[1]['conditions'][2]['field'] == 'node.nid'){
+			$query->where[1]['conditions'][2]['value'] = arg(1);
+		}
+	}
+}
+
+function cgrb_custom_queryalter_query_alter(QueryAlterableInterface $query) {
+
+  // Only change the query if we have the required tag
+  if ($query->hasTag('WorkbenchModerationPublished')) {
+  	// exit('here');
+    // Join the workbench moderation node history table
+    // echo'<pre>';var_dump($query);exit;
+    $query->join('workbench_moderation_node_history', 'wmnh', 'wmnh.nid = n.nid');
+
+    // Add the state and current conditions
+    $query->condition('wmnh.state', 'published');
+    $query->condition('wmnh.is_current', 1);
+  }
+}

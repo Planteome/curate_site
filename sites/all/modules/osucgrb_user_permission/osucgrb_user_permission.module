@@ -1,0 +1,10 @@
+<?php
+function osucgrb_user_permission_form_alter(&$form, &$form_state, $form_id) {
+	if ($form_id == 'annotation_node_form') {
+		global $user;
+		$form['field_assigned_by']['und'][0]['value']['#default_value'] = $user->name;	
+		//$form['field_data_source']['und'][0]['field_source_name']['und']['#default_value'] = 2310;
+		//echo "<pre>"; print_r($form['field_data_source']['und'][0]); exit();
+	}
+	
+}

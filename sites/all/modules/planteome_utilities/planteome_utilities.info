@@ -1,0 +1,4 @@
+name = Planteome - Utilites
+description = Provides utilites for the new Planteome site
+core = 7.x
+package = Planteome

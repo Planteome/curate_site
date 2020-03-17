@@ -1,0 +1,56 @@
+<?php
+
+/**
+ * @file
+ * A module to add custom rules for the Planteome site
+ */
+
+/**
+ * Implements hook_help().
+ *
+ * Displays help and module information.
+ *
+ * @param path 
+ *   Which path of the site we're using to display help
+ * @param arg 
+ *   Array that holds the current path as returned from arg() function
+ */
+function planteome_rules_help($path, $arg) {
+  switch ($path) {
+    case "admin/help#planteome_rules":
+      return t("Implements custom D7 rules for Planteome."); 
+      break; 
+  }
+}
+
+/**
+ * Implements hook_entity_property_info_alter().
+ */
+function planteome_rules_entity_property_info_alter(&$info) {
+  $info['node']['properties']['current-revision-author-mail'] = array(
+    'label' => t('Revision author email'),
+    'type' => 'text',
+    'description' => t('The email of the author of the current revision of the node.'),
+    'computed' => TRUE,
+    'field' => FALSE,
+  );
+}
+
+/**
+ * Implements hook_tokens().
+ */
+function planteome_rules_tokens($type, $tokens, array $data = array(), array $options = array()) {
+  if ($type == 'entity' && $data['entity_type'] == 'node') {
+    $values = array ();
+    foreach ($tokens as $name => $original) {
+      switch ($name) {
+        case 'current-revision-author-mail':
+          $node = $data['entity'];
+          $account = user_load($node->revision_uid);
+          $values[$original] = $account->mail;
+          break;
+      }
+    }
+    return $values;
+  }
+}

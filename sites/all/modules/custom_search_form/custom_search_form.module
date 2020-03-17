@@ -1,0 +1,265 @@
+<?php
+
+function custom_search_form_menu() {  
+
+  $items = array();
+
+  $items['most-searched'] = array(
+  	'title' => t('Most Searched Terms'),
+  	'type' => MENU_NORMAL_ITEM,
+  	'page callback' => 'most_searched_term_page',
+  	'access callback' => true,
+  	);
+
+  return $items;
+
+}
+
+function custom_search_form_form(){
+
+	$form['search'] = array(
+        
+      '#type' => 'textfield',
+
+      '#size' => 60, 
+
+      '#required' => True,
+
+      '#attributes' => array('placeholder' => "SEARCH"),
+
+      //'#prefix' => '<div class="col-md-9 col-sm-9 search-field">',
+
+     ); 
+
+	$form['submit'] = array(
+
+          '#type' => 'submit',
+
+          //'#attributes' => array('class' =>array('hide')),
+
+          '#value' => html_entity_decode('<i class="fa fa-search"></i>'),
+
+          '#suffix' => '<div class="col-md-8 col-sm-8 search-expl">
+						<p>'.variable_get('example_search_text').'</p>
+					</div>
+					<div class="col-md-4 col-sm-4">	
+						<a href="'.base_path().'search"><p>'.variable_get('advanced_search_text').'</p></a>
+					</div>',
+		  /*'#suffix' => '<div class="col-md-8 col-sm-8 search-expl">
+						<p>Example Searches:</p>
+						<p>Ontology terms:endosperm, PO:0009089, fruit quality trait, GO:0009845</p>
+						<p>Bioentities (data objects): CONSTANS, AT5G15850, GRMZM2G061969</p>
+					</div>
+					<div class="col-md-4 col-sm-4">	
+						<a href="'.base_path().'search"><p>Advanced Search</p></a>
+					</div>',*/
+     );     
+
+	// $infield = array(
+ //    'all' => t('any'),
+ //    'EO:Plant Environment Ontology (E)' => t('EO:Plant Environment Ontology (E)'),
+ //    'GO:Biological Process (P)' => t('GO:Biological Process (P)'),
+ //    'GO:Cellular Component (C)' => t('GO:Cellular Component (C)'),
+ //    'GO:Molecular Function (F)' => t('GO:Molecular Function (F)'),
+ //    'PO:Plant Anatomy (A)' => t('PO:Plant Anatomy (A)'),
+ //    'PO:Plant Structure Development Stage (G)' => t('PO:Plant Structure Development Stage (G)'),
+ //    'TO:Plant Trait Ontology (T)' => t('TO:Plant Trait Ontology (T)'),
+ //  );
+ //  $form['infield'] = array(
+ //    '#type' => 'select', //you can find a list of available types in the form api
+ //    '#title' => 'IN',
+ //    '#options' =>$infield,
+ //  );
+
+ //  $type = array(
+ //    'all' => t('any'),
+ //    'antisense_RNA' => t('antisense_RNA'),
+ //    'GO:Biological Process (P)' => t('GO:Biological Process (P)'),
+ //    'GO:Cellular Component (C)' => t('GO:Cellular Component (C)'),
+ //    'GO:Molecular Function (F)' => t('GO:Molecular Function (F)'),
+ //    'PO:Plant Anatomy (A)' => t('PO:Plant Anatomy (A)'),
+ //    'PO:Plant Structure Development Stage (G)' => t('PO:Plant Structure Development Stage (G)'),
+ //    'TO:Plant Trait Ontology (T)' => t('TO:Plant Trait Ontology (T)'),
+ //  );
+ //  $form['type'] = array(
+ //    '#type' => 'select', //you can find a list of available types in the form api
+ //    '#title' => 'Type',
+ //    '#options' =>$type,
+ //  );
+
+ //  $Species = array(
+ //    'all' => t('any'),
+ //    'antisense_RNA' => t('antisense_RNA'),
+ //    'GO:Biological Process (P)' => t('GO:Biological Process (P)'),
+ //    'GO:Cellular Component (C)' => t('GO:Cellular Component (C)'),
+ //    'GO:Molecular Function (F)' => t('GO:Molecular Function (F)'),
+ //    'PO:Plant Anatomy (A)' => t('PO:Plant Anatomy (A)'),
+ //    'PO:Plant Structure Development Stage (G)' => t('PO:Plant Structure Development Stage (G)'),
+ //    'TO:Plant Trait Ontology (T)' => t('TO:Plant Trait Ontology (T)'),
+ //  );
+ //  $form['Species'] = array(
+ //    '#type' => 'select', //you can find a list of available types in the form api
+ //    '#title' => 'Species',
+ //    '#options' =>$Species,
+ //  );
+ //  $form['find'] = array(
+ //    '#type' => 'textfield', //you can find a list of available types in the form api
+ //    '#title' => 'find',
+ //    '#size' => 60,
+ //  );
+ //   $form['submit'] = array(
+ //    '#type' => 'submit',
+ //    '#value' => t('Submit!'),
+ //  );
+
+
+	return $form;
+
+}
+
+function custom_search_form_form_submit($form, &$form_state){
+	if(isset($form_state['values']['search']) && !empty($form_state['values']['search'])){
+		$search_string = $form_state['values']['search'];
+		if(stripos($search_string, "PO:" == 0) || stripos($search_string, "GO:" == 0) || stripos($search_string, "EO:" == 0) || stripos($search_string, "TO:" == 0)){
+			$form_state['redirect'] = array(
+			  'search',
+			  array(
+			    'query' => array(
+			      'combine' => $search_string,
+			    ),
+			  ),    
+			);
+		}else{
+			$is_ontology = get_ontology_id_from_term($search_string);
+			if($is_ontology != $search_string){
+				$form_state['redirect'] = array(
+				  'search',
+				  array(
+				    'query' => array(
+				      'combine' => $is_ontology,
+				    ),
+				  ),    
+				);
+			}else{
+				$form_state['redirect'] = array(
+				  'search',
+				  array(
+				    'query' => array(
+				      'combine' => $search_string,
+				    ),
+				  ),    
+				);
+			}
+		}
+	}else{
+		drupal_goto('search');
+	}
+	//$search_word = $form_state['values']['prosearch'];
+	//drupal_goto("product-list",array('query' => array('search_word' => $search_word)));	
+
+	// $hasEmail = db_select('custom_search_form', 'n')
+ //        ->fields('n')
+ //        ->condition('infield', $form_state['values']['infield'],'=','type', $form_state['values']['type'],'=','Species', $form_state['values']['Species'],'=','find', $form_state['values']['find'],'=')
+ //        ->execute()
+ //        ->fetchAssoc();
+
+ //    if(!$hasEmail) {
+ //        db_insert('custom_search_form')
+ //            ->fields(array(
+ //               'infield' => $form_state['values']['infield'],
+ //               'type' => $form_state['values']['type'],
+ //               'species' => $form_state['values']['Species'],
+ //               'find' => $form_state['values']['find'],
+ //               'count' => 1,
+ //        ))
+ //        ->execute();    
+    //}
+}
+
+function custom_search_form_form_alter(&$form,&$form_state,$form_id){
+	if ($form_id == 'views_exposed_form') {
+        $view = $form_state['view'];
+        if ($view->name == 'search_for_gene' && $view->current_display == 'page') {
+        	$form['#submit'][] = 'most_searched_term_insert';
+
+        	//echo "<pre>"; print_r($form);exit;
+        	$form['combine_op']['#type'] = 'radios';
+        	$combine_option = array('contains' => 'Default Search','=' => 'Exact Search',);
+
+        	$form['combine_op']['#options'] = $combine_option;
+        }
+    }
+}
+
+function most_searched_term_insert($form,$form_state){
+	//echo "<pre>"; print_r($form_state['values']);
+	if(!empty($form_state['values']['field_aspect_tid']) && !empty($form_state['values']['field_gene_type_tid_1']) && !isset($_GET['page'])){
+		$result = db_select('custom_search_form', 'n')
+	        ->fields('n')
+	        ->condition('infield', $form_state['values']['field_aspect_tid'],'=')
+	        ->condition('type', $form_state['values']['field_gene_type_tid_1'],'=')
+	        ->condition('species', $form_state['values']['field_ref_species_target_id'],'=')
+	        ->condition('find', $form_state['values']['combine'],'=')
+	        ->execute()
+	        ->fetchAssoc();
+//echo "<pre>"; print_r($result);exit;
+	    if(!$result) {
+	        db_insert('custom_search_form')
+	            ->fields(array(
+	               'infield' => $form_state['values']['field_aspect_tid'],
+	               'type' => $form_state['values']['field_gene_type_tid_1'],
+	               'species' => $form_state['values']['field_ref_species_target_id'],
+	               'find' => $form_state['values']['combine'],
+	               'count' => 1,
+	        ))
+	        ->execute();
+	    }else{
+	    	$num_updated = db_update('custom_search_form') // Table name no longer needs {}
+			  ->fields(array(
+			    'count' => $result['count']+1,
+			  ))
+			  ->condition('sid', $result['sid'], '=')
+			  ->execute();
+	    }
+	}
+	
+}
+
+function most_searched_term_block(){
+	$result = db_select('custom_search_form', 'n')
+        ->fields('n')
+        ->orderBy('count','DESC')
+        ->range(0,5)
+        ->execute()
+        ->fetchAll();
+
+    $output = "<ol>";
+    foreach ($result as $key => $value) {
+    	$link = base_path().'search?field_aspect_tid='.$value->infield.'&field_gene_type_tid_1='.$value->type.'&field_ref_species_target_id='.$value->species.'&combine='.$value->find;
+    	$output .= "<li><a href='".$link."' >".$value->find."</a></li>";
+    }
+    $output .= "</ol>";
+    
+    return $output;
+}
+
+function most_searched_term_page(){
+	
+	$query = db_select('custom_search_form', 'n')->extend('PagerDefault');
+    $query->fields('n')
+        ->limit(50)
+        ->orderBy('count','DESC');
+    $results = $query->execute()->fetchAll();
+
+    $output = "<h3>Most Searched Terms</h3>";
+    $output .= "<ol>";
+    foreach ($results as $key => $value) {
+    	$link = base_path().'search?field_aspect_tid='.$value->infield.'&field_gene_type_tid_1='.$value->type.'&field_ref_species_target_id='.$value->species.'&combine='.$value->find;
+    	$output .= "<li><a href='".$link."' >".$value->find."</a></li>";
+    }
+    $output .= "</ol>";
+
+    $output .= theme('pager');
+    
+    return $output;
+}

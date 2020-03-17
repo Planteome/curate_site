@@ -1,0 +1,4 @@
+name = OSUCGRB User Permission
+description = OSUCGRB User Permission
+core = 7.x
+package = Planteome
