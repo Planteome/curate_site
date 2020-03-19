@@ -102,7 +102,7 @@ function node_tokens($type, $tokens, array $data = array(), array $options = arr
 
   $replacements = array();
 
-  if ($type == 'node' && !empty($data['node'])) {
+  if ($type == 'node' && !empty($data['node']) && !empty($data['node']->nid)) {
     $node = $data['node'];
 
     foreach ($tokens as $name => $original) {
