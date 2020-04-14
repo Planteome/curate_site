@@ -2256,8 +2256,9 @@ function import_gene_data_to_node($chunk1, $species_nid, $source_name, &$context
 			->fetchAll();
 		$known = array();
 	    $results = array_filter($results, function ($val) use (&$known) {
-	        $unique = !in_array($val->name, $known);
-			$known[] = $val->name;
+	        $unique = !in_array($val->gene_symbol, $known);
+			$known[] = $val->gene_symbol;
+			error_log(print_r($known,true));
 			return $unique;
 	    });
 		if(empty($results)){
