@@ -2248,7 +2248,6 @@ function insert_gene_aliases($chunk2, &$context){
 function import_gene_data_to_node($chunk1, $species_nid, $source_name, &$context){
 	foreach($chunk1 as $data){
 		//results is an array that holds each match from alias file
-		error_log(print_r($data,true));
 		$results = db_select('tmptable', 'tmp')
 			->fields('tmp')
 			->condition('gene_stable_id', $data['Gene stable ID'],'=')
@@ -2258,7 +2257,6 @@ function import_gene_data_to_node($chunk1, $species_nid, $source_name, &$context
 	    $results = array_filter($results, function ($val) use (&$known) {
 	        $unique = !in_array($val->gene_symbol, $known);
 			$known[] = $val->gene_symbol;
-			error_log(print_r($known,true));
 			return $unique;
 	    });
 		if(empty($results)){
