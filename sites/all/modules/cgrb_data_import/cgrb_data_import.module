@@ -546,18 +546,18 @@ function gene_import_form($form, &$form_state){
 	    '#type' => 'file',
 	    '#title' => t('Upload gene file'),
 	);
-	$form['gene_file_alt'] = array(
-		'#type' => 'checkbox',
-		'#title' => t('Use alternative file parser? (for files from UNIX/Mac OS X+)'),
-	);
+//	$form['gene_file_alt'] = array(
+//		'#type' => 'checkbox',
+//		'#title' => t('Use alternative file parser? (for files from UNIX/Mac OS X+)'),
+//	);
 	$form['alias_file'] = array(
 	    '#type' => 'file',
 	    '#title' => t('Upload alias file'),
 	);
-	$form['alias_file_alt'] = array(
-		'#type' => 'checkbox',
-		'#title' => t('Use alternative file parser? (for files from UNIX/Mac OS X+)'),
-	);
+//	$form['alias_file_alt'] = array(
+//		'#type' => 'checkbox',
+//		'#title' => t('Use alternative file parser? (for files from UNIX/Mac OS X+)'),
+//	);
 	$form['data'] = array(
 		'#type'				=> 'textfield',
 		'#title'			=> 'Enter species.',
@@ -2413,7 +2413,8 @@ function validate_database_reference($db_xref_string){
 }
 
 function tabbed_file_to_array($content){
-    $array = explode("\r\n",$content);
+    $array = str_replace("\r", '', $array);
+    $array = explode("\n",$content);
     $fields = array_shift($array);
     $fields = explode("\t",$fields);
     $ret_arr = array();
