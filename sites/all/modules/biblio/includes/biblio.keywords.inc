@@ -138,7 +138,7 @@ function biblio_insert_keywords($node, $update = FALSE) {
   if (isset($node->biblio_keywords) && !is_array($node->biblio_keywords)) {
     $typed_keywords = biblio_explode_keywords($node->biblio_keywords);
   }
-  else {
+  elseif (isset($node->biblio_keywords))  {
     $typed_keywords = $node->biblio_keywords;
   }
 
