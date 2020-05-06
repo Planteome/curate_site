@@ -2158,6 +2158,7 @@ function generate_biblio_from_pmid($pmid){
 				}
 				if (!$dup) {
 					$node->comment = 0;
+					$node->title=substr($node->title,0,255);
 					$node = node_submit($node);
 					node_save($node);
 					return $node->nid; //node id of newly created node
