@@ -2203,21 +2203,32 @@ function generate_biblio_from_doi($string){
 
 function generate_biblio_from_other($string){	
 	global $user;
-	$node = new stdClass();
-	$node->title = $string;
-	$node->type = 'biblio';
-	node_object_prepare($node);
-	$node->language = LANGUAGE_NONE;
-	$node->uid = $user->uid;
-	$node->status = 1;
-	$node->promote = 0;
-	$node->comment = 1;
-	$node->biblio_type = "102"; //journal article
-	$node->biblio_year = "Submitted"; //default value for years
-	$node->biblio_other_number = $string;
-	$node = node_submit($node);
-	node_save($node);
-	return $node->nid;
+	$efq = new EntityFieldQuery();
+	$efq->entityCondition('entity_type', 'node')
+	  ->propertyCondition('title', $string);
+	$check_exists = $efq->execute();
+	if (isset($check_exists['node'])) {
+		$first_element = array_reverse($check_exists['node']); //there should really only be one element
+		$first_element = array_pop($first_element);
+		return $first_element->nid;
+	} else {
+		$title_is_unique = empty($result['node']);
+		$node = new stdClass();
+		$node->title = $string;
+		$node->type = 'biblio';
+		node_object_prepare($node);
+		$node->language = LANGUAGE_NONE;
+		$node->uid = $user->uid;
+		$node->status = 1;
+		$node->promote = 0;
+		$node->comment = 1;
+		$node->biblio_type = "102"; //journal article
+		$node->biblio_year = "Submitted"; //default value for years
+		$node->biblio_other_number = $string;
+		$node = node_submit($node);
+		node_save($node);
+		return $node->nid;
+	}
 }
 
 function gaf_process_finished($success, $results, $operations) {
